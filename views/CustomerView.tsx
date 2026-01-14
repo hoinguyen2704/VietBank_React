@@ -49,14 +49,17 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
       description: ''
   });
 
-  // Selected account for Deposit/Withdraw operations
+  // Selected account for Transfer/Deposit/Withdraw operations
   const [selectedAccountId, setSelectedAccountId] = useState<string>(accounts[0]?.id || '');
 
-  const primaryAccount = accounts.find(a => a.isActive);
+  // Ensure selected account is valid, else fallback to first account
   const selectedAccount = accounts.find(a => a.id === selectedAccountId) || accounts[0];
 
   // Check balance for withdrawal
   const isInsufficientBalance = selectedAccount && withdrawData.amount ? Number(withdrawData.amount) > selectedAccount.balance : false;
+  
+  // Check balance for transfer
+  const isInsufficientTransferBalance = selectedAccount && transferData.amount ? Number(transferData.amount) > selectedAccount.balance : false;
 
   // Filter transactions that involve any of the user's accounts
   const myRawTransactions = transactions.filter(t => 
@@ -111,6 +114,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
 
   const handleTransferSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isInsufficientTransferBalance) return;
     setConfirmModalOpen(true);
   };
 
@@ -142,8 +146,8 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
   };
 
   const confirmTransfer = () => {
-    if (primaryAccount) {
-      onTransfer(primaryAccount.id, transferData.toAccount, Number(transferData.amount), transferData.note);
+    if (selectedAccount && selectedAccount.isActive) {
+      onTransfer(selectedAccount.id, transferData.toAccount, Number(transferData.amount), transferData.note);
       setTransferData({ toAccount: '', amount: '', note: '' });
       setConfirmModalOpen(false);
       setActiveTab('history');
@@ -512,14 +516,39 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
 
         {activeTab === 'transfer' && (
            <div className="max-w-xl mx-auto bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-             {!primaryAccount ? (
-               <div className="text-center text-red-600">Bạn không có tài khoản hoạt động để thực hiện giao dịch.</div>
+             {!selectedAccount || !selectedAccount.isActive ? (
+               <div className="text-center text-red-600 bg-red-50 p-4 rounded-lg border border-red-200">
+                  <AlertCircle className="mx-auto h-8 w-8 mb-2" />
+                  Bạn cần chọn một tài khoản đang hoạt động để thực hiện giao dịch.
+               </div>
              ) : (
+                <>
+                {isInsufficientTransferBalance && (
+                    <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-3 animate-pulse">
+                        <AlertCircle className="text-red-600 w-5 h-5 flex-shrink-0 mt-0.5" />
+                        <div>
+                            <h4 className="text-sm font-bold text-red-800">Số dư không đủ</h4>
+                            <p className="text-sm text-red-600 mt-1">
+                                Số tiền chuyển ({new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(transferData.amount))}) 
+                                vượt quá số dư hiện tại ({new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(selectedAccount.balance)}).
+                            </p>
+                        </div>
+                    </div>
+                )}
                <form onSubmit={handleTransferSubmit} className="space-y-6">
-                 <div className="bg-blue-50 p-4 rounded-lg">
-                    <label className="block text-sm text-blue-800 mb-1">Tài khoản nguồn</label>
-                    <div className="font-mono text-lg font-semibold text-blue-900">{primaryAccount.accountNumber}</div>
-                    <div className="text-sm text-blue-600">Số dư: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(primaryAccount.balance)}</div>
+                 <div>
+                    <label className="block text-sm text-gray-700 mb-1">Tài khoản nguồn</label>
+                    <select 
+                        className="w-full p-2 border rounded-lg bg-blue-50 border-blue-200 focus:ring-blue-500 focus:border-blue-500 font-mono text-blue-900"
+                        value={selectedAccountId}
+                        onChange={(e) => setSelectedAccountId(e.target.value)}
+                    >
+                        {accounts.map(a => (
+                            <option key={a.id} value={a.id}>
+                                {a.accountNumber} - Số dư: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(a.balance)}
+                            </option>
+                        ))}
+                    </select>
                  </div>
 
                  <Input 
@@ -537,6 +566,8 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                     value={transferData.amount}
                     onChange={e => setTransferData({...transferData, amount: e.target.value})}
                     required
+                    error={isInsufficientTransferBalance ? "Vượt quá số dư khả dụng" : undefined}
+                    className={isInsufficientTransferBalance ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""}
                  />
                  <Input 
                     label="Nội dung chuyển tiền" 
@@ -544,10 +575,16 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                     value={transferData.note}
                     onChange={e => setTransferData({...transferData, note: e.target.value})}
                  />
-                 <Button type="submit" fullWidth disabled={!primaryAccount.isActive}>
-                    Tiếp tục
+                 <Button 
+                    type="submit" 
+                    fullWidth 
+                    disabled={!selectedAccount.isActive || isInsufficientTransferBalance}
+                    variant={isInsufficientTransferBalance ? "secondary" : "primary"}
+                 >
+                    {isInsufficientTransferBalance ? "Số dư không đủ" : "Tiếp tục"}
                  </Button>
                </form>
+               </>
              )}
            </div>
         )}
@@ -641,6 +678,10 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
         <div className="space-y-4">
             <p className="text-gray-600">Bạn có chắc chắn muốn chuyển khoản?</p>
             <div className="bg-gray-50 p-4 rounded-lg space-y-2 text-sm">
+                <div className="flex justify-between">
+                    <span>Từ tài khoản:</span>
+                    <span className="font-mono">{selectedAccount?.accountNumber}</span>
+                </div>
                 <div className="flex justify-between">
                     <span>Đến số TK:</span>
                     <span className="font-bold">{transferData.toAccount}</span>
