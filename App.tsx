@@ -296,7 +296,7 @@ export default function App() {
             <div className="bg-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                 {isRegistering ? <UserPlus className="text-white w-8 h-8" /> : <Lock className="text-white w-8 h-8" />}
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">{isRegistering ? 'Đăng ký tài khoản' : 'Đăng nhập VNBank'}</h1>
+            <h1 className="text-2xl font-bold text-gray-900">{isRegistering ? 'Đăng ký tài khoản' : 'Đăng nhập VietBank'}</h1>
             <p className="text-gray-500 text-sm mt-2">{isRegistering ? 'Tạo tài khoản mới và bắt đầu giao dịch' : 'Hệ thống Ngân hàng Lõi'}</p>
           </div>
 

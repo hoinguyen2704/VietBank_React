@@ -224,7 +224,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
             <div className="bg-indigo-700 p-2 rounded-lg">
                 <ShieldCheck className="text-white w-5 h-5" />
             </div>
-            <span className="text-xl font-bold text-gray-900">VNBank Admin</span>
+            <span className="text-xl font-bold text-gray-900">VietBank Admin</span>
           </div>
           <div className="flex items-center space-x-4">
              <span className="text-sm text-gray-600">Admin: {currentUser.name}</span>

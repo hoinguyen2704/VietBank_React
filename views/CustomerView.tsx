@@ -177,7 +177,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
             <div className="p-2 bg-blue-700 rounded-lg">
               <Wallet className="w-6 h-6 text-white" />
             </div>
-            <span className="text-xl font-bold">VNBank</span>
+            <span className="text-xl font-bold">VietBank</span>
           </div>
           
           <nav className="space-y-1">

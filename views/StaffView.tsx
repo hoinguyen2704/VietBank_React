@@ -42,6 +42,10 @@ export const StaffView: React.FC<StaffViewProps> = ({
   // New User Form State
   const [newUser, setNewUser] = useState({ name: '', phone: '', cccd: '', password: '123' });
 
+  // Edit User Form State
+  const [isEditUserOpen, setIsEditUserOpen] = useState(false);
+  const [editUserData, setEditUserData] = useState({ name: '', phone: '', cccd: '', address: '' });
+
   // Filter users based on search
   const filteredUsers = users.filter(u => 
     u.role === UserRole.CUSTOMER && !u.isDeleted &&
@@ -55,6 +59,34 @@ export const StaffView: React.FC<StaffViewProps> = ({
     onAddUser({ ...newUser, role: UserRole.CUSTOMER });
     setIsAddUserOpen(false);
     setNewUser({ name: '', phone: '', cccd: '', password: '123' });
+  };
+
+  const handleOpenEditUser = () => {
+      if(selectedUser) {
+          setEditUserData({
+              name: selectedUser.name,
+              phone: selectedUser.phone,
+              cccd: selectedUser.cccd,
+              address: selectedUser.address || ''
+          });
+          setIsEditUserOpen(true);
+      }
+  };
+
+  const handleEditUserSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      if(selectedUser) {
+          const updatedUser: User = {
+              ...selectedUser,
+              name: editUserData.name,
+              phone: editUserData.phone,
+              cccd: editUserData.cccd,
+              address: editUserData.address
+          };
+          onUpdateUser(updatedUser);
+          setSelectedUser(updatedUser); // Update local selected state to reflect changes immediately
+          setIsEditUserOpen(false);
+      }
   };
 
   const handleDepositSubmit = (e: React.FormEvent) => {
@@ -85,7 +117,7 @@ export const StaffView: React.FC<StaffViewProps> = ({
             <div className="bg-blue-600 p-2 rounded-lg">
                 <Users className="text-white w-5 h-5" />
             </div>
-            <span className="text-xl font-bold text-gray-900">VNBank Staff Portal</span>
+            <span className="text-xl font-bold text-gray-900">VietBank Staff Portal</span>
           </div>
           <div className="flex items-center space-x-4">
              <div className="text-right">
@@ -151,7 +183,7 @@ export const StaffView: React.FC<StaffViewProps> = ({
                             <p className="text-gray-500">Khách hàng từ 2024</p>
                         </div>
                         <div className="flex space-x-2">
-                             <Button variant="secondary" onClick={() => alert("Tính năng chỉnh sửa đang phát triển")}>
+                             <Button variant="secondary" onClick={handleOpenEditUser}>
                                 <Edit size={16} className="mr-2" /> Sửa
                              </Button>
                              <Button variant="danger" onClick={() => { 
@@ -247,6 +279,19 @@ export const StaffView: React.FC<StaffViewProps> = ({
             <Input label="Mật khẩu mặc định" value={newUser.password} readOnly className="bg-gray-100" />
             <div className="pt-2">
                 <Button type="submit" fullWidth>Tạo khách hàng</Button>
+            </div>
+        </form>
+      </Modal>
+
+      {/* Edit Customer Modal */}
+      <Modal isOpen={isEditUserOpen} onClose={() => setIsEditUserOpen(false)} title="Cập nhật thông tin khách hàng">
+        <form onSubmit={handleEditUserSubmit} className="space-y-4">
+            <Input label="Họ và tên" value={editUserData.name} onChange={e => setEditUserData({...editUserData, name: e.target.value})} required />
+            <Input label="Số điện thoại" value={editUserData.phone} onChange={e => setEditUserData({...editUserData, phone: e.target.value})} required />
+            <Input label="CCCD/CMND" value={editUserData.cccd} onChange={e => setEditUserData({...editUserData, cccd: e.target.value})} required />
+            <Input label="Địa chỉ" value={editUserData.address} onChange={e => setEditUserData({...editUserData, address: e.target.value})} />
+            <div className="pt-2">
+                <Button type="submit" fullWidth>Lưu thay đổi</Button>
             </div>
         </form>
       </Modal>
