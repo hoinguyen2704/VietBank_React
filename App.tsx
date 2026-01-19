@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AppState, User, BankAccount, Transaction, UserRole, TransactionReminder } from './types';
+import { AppState, User, BankAccount, Transaction, UserRole, TransactionReminder, Notification } from './types';
 import { INITIAL_USERS, INITIAL_ACCOUNTS, INITIAL_TRANSACTIONS, INITIAL_REMINDERS } from './constants';
 import { CustomerView } from './views/CustomerView';
 import { StaffView } from './views/StaffView';
@@ -14,6 +14,7 @@ export default function App() {
   const [accounts, setAccounts] = useState<BankAccount[]>(INITIAL_ACCOUNTS);
   const [transactions, setTransactions] = useState<Transaction[]>(INITIAL_TRANSACTIONS);
   const [reminders, setReminders] = useState<TransactionReminder[]>(INITIAL_REMINDERS);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   // --- Auth State ---
@@ -34,6 +35,28 @@ export default function App() {
   });
 
   // --- Logic ---
+
+  // Helper to add notification
+  const addNotification = (userId: string, title: string, message: string, type: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' = 'INFO') => {
+      const newNotif: Notification = {
+          id: `n${Date.now()}-${Math.random()}`,
+          userId,
+          title,
+          message,
+          date: new Date().toISOString(),
+          isRead: false,
+          type
+      };
+      setNotifications(prev => [newNotif, ...prev]);
+  };
+
+  const handleMarkAsRead = (notificationId: string) => {
+      setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n));
+  };
+  
+  const handleMarkAllAsRead = (userId: string) => {
+      setNotifications(prev => prev.map(n => n.userId === userId ? { ...n, isRead: true } : n));
+  };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,6 +184,14 @@ export default function App() {
         description: 'Nộp tiền tại quầy'
     };
     setTransactions([newTransaction, ...transactions]);
+    
+    // Notify User
+    addNotification(
+        account.userId, 
+        'Biến động số dư', 
+        `Tài khoản ${account.accountNumber} được nạp +${amount.toLocaleString()} VND tại quầy.`,
+        'SUCCESS'
+    );
   };
 
   // Logic for realtime Deposit simulation (QR/ATM)
@@ -180,7 +211,16 @@ export default function App() {
           description: type === 'DEPOSIT_QR' ? 'Nhận tiền qua mã QR' : 'Nộp tiền mặt tại ATM'
       };
       setTransactions([newTransaction, ...transactions]);
-      alert(`Đã nhận ${amount.toLocaleString()} VND vào tài khoản!`);
+      // alert(`Đã nhận ${amount.toLocaleString()} VND vào tài khoản!`); // Removed alert, using notification instead
+      
+      // Notify User
+      const source = type === 'DEPOSIT_QR' ? 'mã QR' : 'ATM';
+      addNotification(
+        account.userId, 
+        'Tiền vào tài khoản', 
+        `Tài khoản ${account.accountNumber} nhận +${amount.toLocaleString()} VND qua ${source}.`,
+        'SUCCESS'
+    );
   };
 
   const handleToggleAccountStatus = (accountId: string) => {
@@ -239,6 +279,22 @@ export default function App() {
         description: note || `Chuyển tiền đến ${toAccountNumber}`
     };
     setTransactions([transaction, ...transactions]);
+
+    // Notify Sender
+    addNotification(
+        sourceAccount.userId,
+        'Chuyển tiền thành công',
+        `Đã chuyển -${amount.toLocaleString()} VND đến tài khoản ${destAccount.accountNumber}.`,
+        'WARNING' // Warning color typically used for money out or info
+    );
+
+    // Notify Receiver
+    addNotification(
+        destAccount.userId,
+        'Biến động số dư',
+        `Tài khoản ${destAccount.accountNumber} nhận +${amount.toLocaleString()} VND từ ${users.find(u => u.id === sourceAccount.userId)?.name || 'Người lạ'}. Nội dung: ${note}`,
+        'SUCCESS'
+    );
   };
 
   const handleWithdrawExternal = (fromAccountId: string, amount: number, description: string) => {
@@ -271,6 +327,14 @@ export default function App() {
          description: description
      };
      setTransactions([transaction, ...transactions]);
+
+     // Notify User
+     addNotification(
+        account.userId,
+        'Rút tiền thành công',
+        `Tài khoản ${account.accountNumber} đã rút -${amount.toLocaleString()} VND. ${description}`,
+        'INFO'
+    );
   };
 
   const handleAddReminder = (reminder: Omit<TransactionReminder, 'id' | 'createdDate'>) => {
@@ -280,6 +344,7 @@ export default function App() {
       createdDate: new Date().toISOString(),
     };
     setReminders([...reminders, newReminder]);
+    addNotification(reminder.userId, 'Đã tạo lịch nhắc', `Đã tạo lịch nhắc thanh toán cho ${reminder.description}`, 'INFO');
   };
 
   const handleDeleteReminder = (id: string) => {
@@ -442,6 +507,7 @@ export default function App() {
                 accounts={accounts.filter(a => a.userId === currentUser.id)}
                 transactions={transactions}
                 reminders={reminders.filter(r => r.userId === currentUser.id)}
+                notifications={notifications.filter(n => n.userId === currentUser.id)}
                 onLogout={handleLogout}
                 onUpdateProfile={handleUpdateUser}
                 onTransfer={handleTransfer}
@@ -449,6 +515,8 @@ export default function App() {
                 onSimulateDeposit={handleSimulateDeposit}
                 onAddReminder={handleAddReminder}
                 onDeleteReminder={handleDeleteReminder}
+                onMarkAsRead={handleMarkAsRead}
+                onMarkAllAsRead={handleMarkAllAsRead}
             />
         )}
         {currentUser.role === UserRole.STAFF && (

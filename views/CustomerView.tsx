@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
-import { User, BankAccount, Transaction, TransactionReminder } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
+import { User, BankAccount, Transaction, TransactionReminder, Notification } from '../types';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Modal } from '../components/Modal';
-import { CreditCard, Send, User as UserIcon, LogOut, History, Wallet, QrCode, ArrowDownCircle, ArrowUpCircle, Building2, AlertCircle, CalendarClock, Trash2 } from 'lucide-react';
+import { CreditCard, Send, User as UserIcon, LogOut, History, Wallet, QrCode, ArrowDownCircle, ArrowUpCircle, Building2, AlertCircle, CalendarClock, Trash2, Bell, Check, X } from 'lucide-react';
 
 interface CustomerViewProps {
   currentUser: User;
   accounts: BankAccount[];
+  notifications: Notification[];
   onLogout: () => void;
   onUpdateProfile: (user: User) => void;
   onTransfer: (fromAccountId: string, toAccountNumber: string, amount: number, note: string) => void;
@@ -18,11 +19,14 @@ interface CustomerViewProps {
   reminders: TransactionReminder[];
   onAddReminder: (reminder: Omit<TransactionReminder, 'id' | 'createdDate'>) => void;
   onDeleteReminder: (id: string) => void;
+  onMarkAsRead: (id: string) => void;
+  onMarkAllAsRead: (userId: string) => void;
 }
 
 export const CustomerView: React.FC<CustomerViewProps> = ({
   currentUser,
   accounts,
+  notifications,
   onLogout,
   onUpdateProfile,
   onTransfer,
@@ -31,7 +35,9 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
   transactions,
   reminders,
   onAddReminder,
-  onDeleteReminder
+  onDeleteReminder,
+  onMarkAsRead,
+  onMarkAllAsRead
 }) => {
   const [activeTab, setActiveTab] = useState<'home' | 'transfer' | 'deposit' | 'withdraw' | 'profile' | 'history' | 'reminders'>('home');
   const [transferData, setTransferData] = useState({ toAccount: '', amount: '', note: '' });
@@ -39,6 +45,11 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
   const [profileData, setProfileData] = useState(currentUser);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   
+  // Notification State
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [latestNotification, setLatestNotification] = useState<Notification | null>(null);
+  const prevNotifCount = useRef(notifications.length);
+
   // Reminder State
   const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
   const [reminderData, setReminderData] = useState({
@@ -61,24 +72,37 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
   // Check balance for transfer
   const isInsufficientTransferBalance = selectedAccount && transferData.amount ? Number(transferData.amount) > selectedAccount.balance : false;
 
+  // Notification Logic: Detect new notifications for Toast
+  useEffect(() => {
+      if (notifications.length > prevNotifCount.current) {
+          const newNotif = notifications[0]; // Assuming new ones added to start
+          if (!newNotif.isRead) {
+              setLatestNotification(newNotif);
+              // Auto hide toast after 5 seconds
+              const timer = setTimeout(() => {
+                  setLatestNotification(null);
+              }, 5000);
+              return () => clearTimeout(timer);
+          }
+      }
+      prevNotifCount.current = notifications.length;
+  }, [notifications]);
+
   // Filter transactions that involve any of the user's accounts
   const myRawTransactions = transactions.filter(t => 
     accounts.some(a => a.id === t.fromAccountId || a.id === t.toAccountId)
   );
 
-  // Flatten transactions for display: split into debit/credit items per account
-  // This ensures internal transfers show as two rows (one out, one in)
+  // Flatten transactions for display
   const historyItems = myRawTransactions.flatMap(t => {
         const items = [];
         const mySource = accounts.find(a => a.id === t.fromAccountId);
         const myDest = accounts.find(a => a.id === t.toAccountId);
 
-        // Debit side (Money leaving)
         if (mySource) {
             let label = 'Chuyển tiền';
             if (t.type === 'WITHDRAW_ATM') label = 'Rút tiền ATM';
             if (t.type === 'WITHDRAW_EXTERNAL') label = 'Rút tiền';
-            
             items.push({
                 id: t.id + '_debit',
                 originalDate: t.date,
@@ -91,12 +115,10 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
             });
         }
         
-        // Credit side (Money entering)
         if (myDest) {
             let label = 'Nhận tiền';
             if (t.type.includes('DEPOSIT')) label = 'Nạp tiền';
             if (t.type === 'TRANSFER') label = 'Nhận chuyển khoản';
-
             items.push({
                 id: t.id + '_credit',
                 originalDate: t.date,
@@ -126,7 +148,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
         }
         onWithdraw(selectedAccount.id, Number(withdrawData.amount), `Rút về ${withdrawData.bankName} - ${withdrawData.bankAccount}: ${withdrawData.note}`);
         setWithdrawData({ amount: '', bankName: '', bankAccount: '', note: '' });
-        alert("Giao dịch rút tiền đã được gửi!");
+        // alert("Giao dịch rút tiền đã được gửi!"); // Removed alert to use notification system
         setActiveTab('history');
     }
   };
@@ -172,8 +194,34 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
       }
   };
 
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
+    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row relative">
+      {/* Toast Notification */}
+      {latestNotification && (
+          <div className="fixed top-4 right-4 z-50 animate-bounce-in">
+              <div className={`bg-white border-l-4 shadow-lg rounded-r-lg p-4 flex items-start max-w-sm ${latestNotification.type === 'SUCCESS' ? 'border-green-500' : latestNotification.type === 'ERROR' ? 'border-red-500' : 'border-blue-500'}`}>
+                  <div className={`p-1 rounded-full mr-3 flex-shrink-0 ${latestNotification.type === 'SUCCESS' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
+                      {latestNotification.type === 'SUCCESS' ? <Check size={16} /> : <AlertCircle size={16} />}
+                  </div>
+                  <div className="flex-1">
+                      <h4 className="font-bold text-gray-800 text-sm">{latestNotification.title}</h4>
+                      <p className="text-gray-600 text-xs mt-1">{latestNotification.message}</p>
+                      <button 
+                        onClick={() => { onMarkAsRead(latestNotification.id); setLatestNotification(null); }}
+                        className="text-xs text-blue-600 hover:underline mt-2"
+                      >
+                          Đánh dấu đã đọc
+                      </button>
+                  </div>
+                  <button onClick={() => setLatestNotification(null)} className="text-gray-400 hover:text-gray-600 ml-2">
+                      <X size={14} />
+                  </button>
+              </div>
+          </div>
+      )}
+
       {/* Sidebar Mobile & Desktop */}
       <div className="bg-blue-900 text-white md:w-64 flex-shrink-0 flex flex-col justify-between">
         <div className="p-6">
@@ -231,6 +279,51 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
             </h1>
             <p className="text-gray-500">Xin chào, {currentUser.name}</p>
           </div>
+          <div className="flex items-center space-x-4">
+              {/* Notification Bell */}
+              <div className="relative">
+                  <button 
+                    onClick={() => setIsNotifOpen(!isNotifOpen)}
+                    className={`p-2 rounded-full transition-colors ${isNotifOpen ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100 text-gray-600'}`}
+                  >
+                      <Bell size={24} />
+                      {unreadCount > 0 && (
+                          <span className="absolute top-0 right-0 h-5 w-5 flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full border-2 border-white">
+                              {unreadCount}
+                          </span>
+                      )}
+                  </button>
+
+                  {/* Notification Dropdown */}
+                  {isNotifOpen && (
+                      <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden">
+                          <div className="p-3 border-b flex justify-between items-center bg-gray-50">
+                              <h3 className="font-semibold text-gray-800">Thông báo</h3>
+                              <button onClick={() => onMarkAllAsRead(currentUser.id)} className="text-xs text-blue-600 hover:underline">Đọc tất cả</button>
+                          </div>
+                          <div className="max-h-80 overflow-y-auto">
+                              {notifications.length === 0 ? (
+                                  <div className="p-6 text-center text-gray-500 text-sm">Không có thông báo mới</div>
+                              ) : (
+                                  notifications.map(notif => (
+                                      <div 
+                                        key={notif.id} 
+                                        className={`p-3 border-b last:border-0 hover:bg-gray-50 cursor-pointer transition-colors ${!notif.isRead ? 'bg-blue-50' : ''}`}
+                                        onClick={() => onMarkAsRead(notif.id)}
+                                      >
+                                          <div className="flex justify-between items-start mb-1">
+                                              <span className={`text-sm font-semibold ${notif.type === 'SUCCESS' ? 'text-green-600' : 'text-gray-800'}`}>{notif.title}</span>
+                                              <span className="text-xs text-gray-400">{new Date(notif.date).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}</span>
+                                          </div>
+                                          <p className="text-xs text-gray-600 line-clamp-2">{notif.message}</p>
+                                      </div>
+                                  ))
+                              )}
+                          </div>
+                      </div>
+                  )}
+              </div>
+          </div>
         </header>
 
         {activeTab === 'home' && (
@@ -283,6 +376,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
           </div>
         )}
 
+        {/* ... (Other tabs similar to previous implementation) ... */}
         {activeTab === 'reminders' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-4">

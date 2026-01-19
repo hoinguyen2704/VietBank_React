@@ -49,10 +49,21 @@ export interface TransactionReminder {
   createdDate: string;
 }
 
+export interface Notification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  date: string;
+  isRead: boolean;
+  type: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
+}
+
 export interface AppState {
   currentUser: User | null;
   users: User[];
   accounts: BankAccount[];
   transactions: Transaction[];
   reminders: TransactionReminder[];
+  notifications: Notification[];
 }
